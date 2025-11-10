@@ -1,14 +1,11 @@
 #!/bin/bash
-# build binary distributions for linux/amd64 and darwin/amd64
+# build binary distributions for linux/amd64, linux/arm64 and darwin/amd64
 # set -e
 
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo "working dir $DIR"
 mkdir -p $DIR/dist
-dep ensure || exit 1
 
-os=$(go env GOOS)
-arch=$(go env GOARCH)
 version=$(cat $DIR/version.go | grep "const VERSION" | awk '{print $NF}' | sed 's/"//g')
 goversion=$(go version | awk '{print $3}')
 sha256sum=()
@@ -16,7 +13,17 @@ sha256sum=()
 echo "... running tests"
 ./test.sh
 
-for os in windows linux darwin; do
+# Define OS/ARCH combinations to build
+declare -a builds=(
+    "windows:amd64"
+    "linux:amd64"
+    "linux:arm64"
+    "darwin:amd64"
+)
+
+for build in "${builds[@]}"; do
+    os="${build%%:*}"
+    arch="${build##*:}"
     echo "... building v$version for $os/$arch"
     EXT=
     if [ $os = windows ]; then
@@ -24,7 +31,7 @@ for os in windows linux darwin; do
     fi
     BUILD=$(mktemp -d ${TMPDIR:-/tmp}/oauth2_proxy.XXXXXX)
     TARGET="oauth2_proxy-$version.$os-$arch.$goversion"
-    FILENAME="oauth2_proxy"
+    FILENAME="oauth2_proxy$EXT"
     GOOS=$os GOARCH=$arch CGO_ENABLED=0 \
         go build -ldflags="-s -w" -o $BUILD/$TARGET/$FILENAME || exit 1
     pushd $BUILD/$TARGET
